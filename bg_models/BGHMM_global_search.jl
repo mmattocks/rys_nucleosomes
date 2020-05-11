@@ -1,7 +1,8 @@
 #JOB FILEPATHS
 #sample record and hmm serialisation output path
 sample_output = "/bench/PhD/NGS_binaries/BGHMM/BGHMM_samples"
-hmm_output = "/bench/PhD/NGS_binaries/BGHMM/hmmchains"
+survey_input = "/bench/PhD/NGS_binaries/BGHMM/survey_chains"
+hmm_output = "/bench/PhD/NGS_binaries/BGHMM/global_chains"
 
 #GENERAL SETUP
 @info "Loading libraries..."
@@ -10,17 +11,15 @@ using Distributed, ProgressMeter, Serialization
 #JOB CONSTANTS
 #CONSTANTS FOR BGHMM LEARNING
 const A = 4 #base alphabet size is 4 (DNA)
-const replicates = 3 #repeat optimisation from this many seperately initialised samples from the prior
-const Ks = [1,2,4,6] #mosaic class #s to test
-const order_nos = [0,1,2] #DNA kmer order #s to test
-const no_models = length(Ks)*length(order_nos)*replicates
-const input_hmms= RemoteChannel(()->Channel{Tuple}(no_models*3)) #channel to hold HMM learning jobs
+const replicates = 8 #repeat optimisation from this many seperately initialised samples from the prior
+const no_models = replicates * 3
+const input_hmms= RemoteChannel(()->Channel{Tuple}(no_models)) #channel to hold HMM learning jobs
 const learnt_hmms= RemoteChannel(()->Channel{Tuple}(Inf)) #channel to take EM iterates off of
-const delta_thresh=1e-3 #stopping/convergence criterion (log probability difference btw subsequent EM iterates)
-const max_iterates=15000
+const delta_thresh=1e-5 #stopping/convergence criterion (log probability difference btw subsequent EM iterates)
+const max_iterates=25000
 
 #DISTRIBUTED CLUSTER CONSTANTS
-#remote_machine = "10.0.0.2"
+#remote_machine = "10.0.0.3"
 no_local_processes = 4
 no_remote_processes = 0
 #SETUP DISTRIBUTED BAUM WELCH LEARNERS
@@ -32,7 +31,7 @@ worker_pool = [i for i in 2:pool_size+1]
 
 @info "Loading worker libraries everywhere..."
 @everywhere using BGHMM, DataFrames, Distributions, Random, CLHMM
-@everywhere Random.seed!(786)
+@everywhere Random.seed!(2786)
 
 #LOAD SAMPLES
 @info "Loading samples from $sample_output..."
@@ -43,14 +42,16 @@ training_sets, test_sets = BGHMM.split_obs_sets(sample_dfs)
 
 #INTIIALIZE HMMS
 @info "Setting up HMMs..."
-if isfile(hmm_output) #if some results have already been collected, load them
-    @info "Loading incomplete results..."
+if isfile(hmm_output) #load chains from incomplete
+    @info "Loading incomplete chains..."
     hmm_results_dict = deserialize(hmm_output)
-else #otherwise, init a new results dict
-    @info "Initialising new HMM results file at $hmm_output"
-    hmm_results_dict = Dict() #dict for storing results
+else #otherwise, load survey results
+    @info "Loading survey chains..."
+    hmm_results_dict = deserialize(survey_input)
 end
-no_input_hmms = BGHMM.HMM_survey_setup!(order_nos, Ks, replicates, hmm_results_dict, input_hmms, training_sets, A)
+
+search_params = BGHMM.HMM_global_search_params(hmm_results_dict)
+no_input_hmms = BGHMM.HMM_global_search_setup!(hmm_results_dict, search_params, replicates, delta_thresh, input_hmms, training_sets, A)
 
 #SEND HMM FIT JOBS TO WORKERS
 if isready(input_hmms) > 0

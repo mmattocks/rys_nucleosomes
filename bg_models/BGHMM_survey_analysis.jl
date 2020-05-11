@@ -2,6 +2,7 @@
 sample_output = "/bench/PhD/NGS_binaries/BGHMM/BGHMM_samples"
 hmm_output = "/bench/PhD/NGS_binaries/BGHMM/hmmchains"
 selected_hmm_output = "/bench/PhD/NGS_binaries/BGHMM/selected_BGHMMs"
+survey_results_path = "/bench/PhD/NGS_binaries/BGHMM/survey_chains"
 
 #GENERAL SETUP
 @info "Loading libraries..."
@@ -50,26 +51,34 @@ hmm_max_run_length_dict = Dict()
     hmm_max_run_length_dict[jobid] = maximum(diagonal_mrls)
 end
 
-#SELECT BEST MODELS FOR PARTITIONS
-BGHMM_dict = Dict{String,Tuple{HMM, Int64, Int64, Float64}}()
+#SELECT BEST MODELS FOR PARTITIONS, COPY AND PARE RESULTS DICT TO CONTAIN ONLY BEST MODELS TRIPLICATES
+best_dict = Dict{String,Tuple{HMM, Int64, Int64, Int64, Float64}}()
 for (jobid, likelihood) in hmm_likelihoods_dict
-    partition = jobid[1]
-    order = jobid[3]
-    replicate=jobid[4]
-    if !haskey(BGHMM_dict, partition)
-        BGHMM_dict[partition] = (hmm_results_dict[jobid][end][2], order, replicate,likelihood)
+    partition, classes, order, replicate = jobid
+    if !haskey(best_dict, partition)
+        best_dict[partition] = (hmm_results_dict[jobid][end][2], classes, order, replicate,likelihood)
     else
-        if likelihood > BGHMM_dict[partition][4]
-            BGHMM_dict[partition] = (hmm_results_dict[jobid][end][2], order, replicate, likelihood)
+        if likelihood > best_dict[partition][4]
+            best_dict[partition] = (hmm_results_dict[jobid][end][2], classes, order, replicate, likelihood)
         end
     end
 end
 
-@info "Best models by partition:"
-for partition in partitions
-    hmm = BGHMM_dict[partition][1]
-    println("$partition :")
-    println(hmm)
+pared_results=deepcopy(hmm_results_dict)
+for (partition, (hmm, classes, order, replicate, likelihood)) in best_dict
+    for (jobid, chain) in pared_results
+        ipartition, iclasses, iorder, ireplicate = jobid
+        if ipartition==partition
+            if iclasses!=classes || iorder!=order
+                delete!(pared_results,jobid)
+            end
+        end
+    end
+end
+
+survey_results_dict=Dict() #cut down memory usage by making new dict
+for (jobid, chain) in pared_results
+    survey_results_dict[jobid]=chain
 end
 
 #INITIALIZE DATA MATRICES AND COMPOSE VALUES FOR PLOTTING
@@ -134,15 +143,15 @@ secondOmit = plot(Matrix{Int64}(mit_dict[2][:,:,3]), Matrix{Float64}(mit_dict[2]
 
 #SETUP FOR PARAMETRIC CONVERGENCE PLOTS
 coord_dict=Dict{String,Vector{Vector{Tuple{Float64,Float64,Float64}}}}()
-for (partition, (hmm, order, replicate, lh)) in BGHMM_dict
+for (partition, (hmm, classes, order, replicate, lh)) in best_dict
     other_reps = deleteat!(collect(1:replicates), replicate)
     chains=Vector{Vector{Any}}()
-    jobid=(partition, length(hmm.D), order, replicate)
+    jobid=(partition, classes, order, replicate)
     chain=hmm_results_dict[jobid]
     push!(chains, chain)
 
     for rep in other_reps
-        jobid=(partition, length(hmm.D), order, rep)
+        jobid=(partition, classes, order, rep)
         chain=hmm_results_dict[jobid]
         push!(chains, chain)
     end
@@ -174,7 +183,7 @@ plot3d!(coord_dict["periexonic"][3][end], markershape=[:rect], markercolors=[:cy
 #SETUP FOR DIAGONAL STABILITY PLOTS
 selected_diagonals=Dict()
 
-for (partition, (hmm, order, replicate, lh)) in BGHMM_dict
+for (partition, (hmm, order, replicate, lh)) in best_dict
     chain=hmm_results_dict[(partition, length(hmm.D), order, replicate)]
     selected_diagonals[partition]=BGHMM.chain_diagonal_stability_matrix(chain)
 end
@@ -201,4 +210,5 @@ for (filename, plot) in plots_to_print
 end
 
 #SERIALIZE SELECTED MODELS FOR LATER USE
-serialize(selected_hmm_output, BGHMM_dict)
+serialize(selected_hmm_output, best_dict)
+serialize(survey_results_path, survey_results_dict)
