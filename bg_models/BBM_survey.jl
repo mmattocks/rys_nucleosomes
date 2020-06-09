@@ -1,7 +1,7 @@
 #JOB FILEPATHS
 #sample record and hmm serialisation output path
 sample_output = "/bench/PhD/NGS_binaries/BBM/BBM_samples"
-hmm_output = "/bench/PhD/NGS_binaries/BBM/hmmchains"
+hmm_output = "/bench/PhD/NGS_binaries/BBM/hmm_chains"
 
 #GENERAL SETUP
 @info "Loading libraries..."
@@ -29,12 +29,13 @@ end
 
 #DISTRIBUTED CLUSTER CONSTANTS
 #remote_machine = "10.0.0.2"
+remote_machine = "18.189.192.210"
 no_local_processes = 4
 no_remote_processes = 0
 #SETUP DISTRIBUTED BAUM WELCH LEARNERS
 @info "Spawning workers..."
 worker_pool=addprocs(no_local_processes, topology=:master_worker)
-#worker_pool=vcat(worker_pool, addprocs([(remote_machine,no_remote_processes)], tunnel=true, topology=:master_worker))
+worker_pool=vcat(worker_pool, addprocs([(remote_machine,no_remote_processes)], tunnel=true, topology=:master_worker))
 
 #AWS PARAMS
 security_group_name="calc1"
@@ -47,12 +48,12 @@ no_instances=1
 instance_workers=2
 spot_price=.025
 
-include("/srv/git/rys_nucleosomes/aws/aws_wrangler.jl")
-aws_ips = spot_wrangle(no_instances, spot_price, security_group_name, security_group_desc, zone, ami, instance_type)
+#include("/srv/git/rys_nucleosomes/aws/aws_wrangler.jl")
+#aws_ips = spot_wrangle(no_instances, spot_price, security_group_name, security_group_desc, zone, ami, instance_type)
 
-for ip in aws_ips
-    worker_pool=vcat(worker_pool, addprocs([(ip, instance_workers)], tunnel=true, topology=:master_worker))
-end
+# for ip in aws_ips
+#     worker_pool=vcat(worker_pool, addprocs([(ip, instance_workers)], tunnel=true, topology=:master_worker))
+# end
 
 @info "Loading worker libraries everywhere..."
 @everywhere using BioBackgroundModels, Random
@@ -68,6 +69,6 @@ else #otherwise, pass a new results dict
     hmm_results_dict = Dict{Chain_ID,Vector{EM_step}}()
 end
 
-em_jobset = setup_EM_jobs!(job_ids, training_sets; results=hmm_results_dict)
+em_jobset = setup_EM_jobs!(job_ids, training_sets; chains=hmm_results_dict)
 execute_EM_jobs!(worker_pool, em_jobset..., hmm_output; delta_thresh=delta_thresh, max_iterates=max_iterates)
 
