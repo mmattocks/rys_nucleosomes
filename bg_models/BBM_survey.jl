@@ -6,6 +6,7 @@ hmm_output = "/bench/PhD/NGS_binaries/BBM/hmm_chains"
 #GENERAL SETUP
 @info "Loading libraries..."
 using BioBackgroundModels, DataFrames, Distributed, Serialization
+include("/srv/git/rys_nucleosomes/aws/aws_wrangler.jl")
 
 #JOB CONSTANTS
 const replicates = 3 #repeat optimisation from this many seperately initialised samples from the prior
@@ -28,32 +29,41 @@ for (obs_id, obs) in training_sets, K in Ks, order in order_nos, rep in 1:replic
 end
 
 #DISTRIBUTED CLUSTER CONSTANTS
-#remote_machine = "10.0.0.2"
-remote_machine = "18.189.192.210"
+remote_machine = "10.0.0.3"
 no_local_processes = 4
-no_remote_processes = 0
+no_remote_processes = 8
 #SETUP DISTRIBUTED BAUM WELCH LEARNERS
-@info "Spawning workers..."
+@info "Spawning local cluster workers..."
 worker_pool=addprocs(no_local_processes, topology=:master_worker)
 worker_pool=vcat(worker_pool, addprocs([(remote_machine,no_remote_processes)], tunnel=true, topology=:master_worker))
 
 #AWS PARAMS
+@info "Setting up AWS wrangling..."
+
 security_group_name="calc1"
 security_group_desc="calculation group"
-ami="ami-0e91c75f42619e667"
-keys="AWS"
-instance_type="c4.large"
-zone="us-east-2a"
+ami="ami-063cddf0f806942e5"
+skeys="AWS"
+instance_type="m5.4xlarge"
+zone,spot_price=get_cheapest_zone(instance_type)
 no_instances=1
-instance_workers=2
-spot_price=.025
+instance_workers=8
+bid=spot_price+.01
 
-#include("/srv/git/rys_nucleosomes/aws/aws_wrangler.jl")
-#aws_ips = spot_wrangle(no_instances, spot_price, security_group_name, security_group_desc, zone, ami, instance_type)
+@assert bid >= spot_price
 
-# for ip in aws_ips
-#     worker_pool=vcat(worker_pool, addprocs([(ip, instance_workers)], tunnel=true, topology=:master_worker))
-# end
+@info "Wrangling AWS instances..."
+# aws_ips = spot_wrangle(no_instances, spot_price, security_group_name, security_group_desc, skeys, zone, ami, instance_type)
+# @info "Giving instances a minute..."
+# sleep(60)
+# @info "Adding workers to AWS instances..."
+
+aws_ips = ["3.22.225.117"]
+
+@info "Spawning AWS cluster workers..."
+for ip in aws_ips
+    global worker_pool=vcat(worker_pool, addprocs([(ip, instance_workers)], tunnel=true, topology=:master_worker, sshflags="-o StrictHostKeyChecking=no"))
+end
 
 @info "Loading worker libraries everywhere..."
 @everywhere using BioBackgroundModels, Random
@@ -71,4 +81,3 @@ end
 
 em_jobset = setup_EM_jobs!(job_ids, training_sets; chains=hmm_results_dict)
 execute_EM_jobs!(worker_pool, em_jobset..., hmm_output; delta_thresh=delta_thresh, max_iterates=max_iterates)
-
