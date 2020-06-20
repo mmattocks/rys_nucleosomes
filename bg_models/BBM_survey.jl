@@ -42,12 +42,12 @@ worker_pool=vcat(worker_pool, addprocs([(remote_machine,no_remote_processes)], t
 
 security_group_name="calc1"
 security_group_desc="calculation group"
-ami="ami-0f608834eda21710c"
+ami="ami-0535e7cc3fc5820aa"
 skeys="AWS"
 instance_type="c5.4xlarge"
 zone,spot_price=get_cheapest_zone(instance_type)
 no_instances=1
-instance_workers=16
+instance_workers=8
 bid=spot_price+.01
 
 @assert bid >= spot_price
@@ -61,13 +61,12 @@ sleep(60)
 
 @info "Spawning AWS cluster workers..."
 for ip in aws_ips
-    global worker_pool=vcat(worker_pool, addprocs([(ip, instance_workers)], tunnel=true, topology=:master_worker, sshflags="-o StrictHostKeyChecking=no"))
+    machinespec="ubuntu@"*ip
+    global worker_pool=vcat(worker_pool, addprocs([(machinespec, instance_workers)], tunnel=true, topology=:master_worker, sshflags="-o StrictHostKeyChecking=no"))
 end
 
 @info "Loading worker libraries everywhere..."
-@everywhere using BioBackgroundModels, Random
-@everywhere Random.seed!(786)
-
+@everywhere using BioBackgroundModels
 #INTIIALIZE HMMS
 @info "Setting up HMMs..."
 if isfile(hmm_output) #if some results have already been collected, load them
