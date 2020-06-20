@@ -29,13 +29,27 @@ for (obs_id, obs) in training_sets, K in Ks, order in order_nos, rep in 1:replic
 end
 
 #DISTRIBUTED CLUSTER CONSTANTS
+load_dict=Dict{Int64,LoadConfig}()
+local_config=LoadConfig(6:6,0:2,[""])
+remote_config=LoadConfig(4:6,0:2,[""])
+aws_instance_config=LoadConfig(1:4,0:2,[""])
 remote_machine = "10.0.0.3"
 no_local_processes = 2
 no_remote_processes = 5
 #SETUP DISTRIBUTED BAUM WELCH LEARNERS
 @info "Spawning local cluster workers..."
 worker_pool=addprocs(no_local_processes, topology=:master_worker)
-worker_pool=vcat(worker_pool, addprocs([(remote_machine,no_remote_processes)], tunnel=true, topology=:master_worker))
+for worker in worker_pool
+    load_dict[worker]=local_config
+end
+
+remote_pool=addprocs([(remote_machine,no_remote_processes)], tunnel=true, topology=:master_worker)
+
+for worker in remote_pool
+    load_dict[worker]=remote_config
+end
+
+worker_pool=vcat(worker_pool, remote_pool)
 
 #AWS PARAMS
 @info "Setting up AWS wrangling..."
@@ -62,7 +76,11 @@ sleep(60)
 @info "Spawning AWS cluster workers..."
 for ip in aws_ips
     machinespec="ubuntu@"*ip
-    global worker_pool=vcat(worker_pool, addprocs([(machinespec, instance_workers)], tunnel=true, topology=:master_worker, sshflags="-o StrictHostKeyChecking=no"))
+    instance_pool=addprocs([(machinespec, instance_workers)], tunnel=true, topology=:master_worker, sshflags="-o StrictHostKeyChecking=no")
+    for worker in instance_pool
+        load_dict[worker]=aws_instance_config
+    end
+    global worker_pool=vcat(worker_pool, instance_pool)
 end
 
 @info "Loading worker libraries everywhere..."
@@ -78,4 +96,4 @@ else #otherwise, pass a new results dict
 end
 
 em_jobset = setup_EM_jobs!(job_ids, training_sets; chains=hmm_results_dict)
-execute_EM_jobs!(worker_pool, em_jobset..., hmm_output; delta_thresh=delta_thresh, max_iterates=max_iterates)
+execute_EM_jobs!(worker_pool, em_jobset..., hmm_output; load_dict=load_dict, delta_thresh=delta_thresh, max_iterates=max_iterates)
