@@ -66,17 +66,16 @@ bid=spot_price+.01
 
 @assert bid >= spot_price
 
-@info "Wrangling AWS instances..."
-aws_ips = spot_wrangle(no_instances, spot_price, security_group_name, security_group_desc, skeys, zone, ami, instance_type)
-@info "Giving instances 90s to boot..."
-sleep(90)
+# @info "Wrangling AWS instances..."
+# aws_ips = spot_wrangle(no_instances, spot_price, security_group_name, security_group_desc, skeys, zone, ami, instance_type)
+# @info "Giving instances 90s to boot..."
+# sleep(90)
 
-# aws_ips = ["18.223.133.202"]
+aws_ips = ["18.218.244.125","3.19.69.137"]
 
 @info "Spawning AWS cluster workers..."
 for ip in aws_ips
-    machinespec="ubuntu@"*ip
-    instance_pool=addprocs([(machinespec, instance_workers)], tunnel=true, topology=:master_worker, sshflags="-o StrictHostKeyChecking=no")
+    instance_pool=addprocs([(ip, instance_workers)], tunnel=true, topology=:master_worker, sshflags="-o StrictHostKeyChecking=no")
     for worker in instance_pool
         load_dict[worker]=aws_instance_config
     end
