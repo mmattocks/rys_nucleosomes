@@ -42,23 +42,22 @@ worker_pool=vcat(worker_pool, addprocs([(remote_machine,no_remote_processes)], t
 
 security_group_name="calc1"
 security_group_desc="calculation group"
-ami="ami-063cddf0f806942e5"
+ami="ami-0f608834eda21710c"
 skeys="AWS"
-instance_type="m5.4xlarge"
+instance_type="c5.4xlarge"
 zone,spot_price=get_cheapest_zone(instance_type)
 no_instances=1
-instance_workers=8
+instance_workers=16
 bid=spot_price+.01
 
 @assert bid >= spot_price
 
 @info "Wrangling AWS instances..."
-# aws_ips = spot_wrangle(no_instances, spot_price, security_group_name, security_group_desc, skeys, zone, ami, instance_type)
-# @info "Giving instances a minute..."
-# sleep(60)
-# @info "Adding workers to AWS instances..."
+aws_ips = spot_wrangle(no_instances, spot_price, security_group_name, security_group_desc, skeys, zone, ami, instance_type)
+@info "Giving instances a minute..."
+sleep(60)
 
-aws_ips = ["3.22.225.117"]
+# aws_ips = ["18.223.133.202"]
 
 @info "Spawning AWS cluster workers..."
 for ip in aws_ips
