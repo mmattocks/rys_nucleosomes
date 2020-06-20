@@ -30,8 +30,8 @@ end
 
 #DISTRIBUTED CLUSTER CONSTANTS
 remote_machine = "10.0.0.3"
-no_local_processes = 4
-no_remote_processes = 8
+no_local_processes = 2
+no_remote_processes = 5
 #SETUP DISTRIBUTED BAUM WELCH LEARNERS
 @info "Spawning local cluster workers..."
 worker_pool=addprocs(no_local_processes, topology=:master_worker)
@@ -46,7 +46,7 @@ ami="ami-0535e7cc3fc5820aa"
 skeys="AWS"
 instance_type="c5.4xlarge"
 zone,spot_price=get_cheapest_zone(instance_type)
-no_instances=1
+no_instances=2
 instance_workers=8
 bid=spot_price+.01
 
