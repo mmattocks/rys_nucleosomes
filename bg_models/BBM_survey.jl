@@ -68,8 +68,8 @@ bid=spot_price+.01
 
 @info "Wrangling AWS instances..."
 aws_ips = spot_wrangle(no_instances, spot_price, security_group_name, security_group_desc, skeys, zone, ami, instance_type)
-@info "Giving instances a minute..."
-sleep(60)
+@info "Giving instances 90s to boot..."
+sleep(90)
 
 # aws_ips = ["18.223.133.202"]
 
