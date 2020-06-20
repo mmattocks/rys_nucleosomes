@@ -56,7 +56,7 @@ worker_pool=vcat(worker_pool, remote_pool)
 
 security_group_name="calc1"
 security_group_desc="calculation group"
-ami="ami-0535e7cc3fc5820aa"
+ami="ami-0238824bb14f0ea23"
 skeys="AWS"
 instance_type="c5.4xlarge"
 zone,spot_price=get_cheapest_zone(instance_type)
