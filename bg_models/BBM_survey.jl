@@ -30,9 +30,9 @@ end
 
 #DISTRIBUTED CLUSTER CONSTANTS
 load_dict=Dict{Int64,LoadConfig}()
-local_config=LoadConfig(6:6,0:2,[""])
-remote_config=LoadConfig(4:6,0:2,[""])
-aws_instance_config=LoadConfig(1:4,0:2,[""])
+local_config=LoadConfig(6:6,2:2,[""])
+remote_config=LoadConfig(4:6,1:2,[""])
+aws_instance_config=LoadConfig(1:6,0:2,[""])
 remote_machine = "10.0.0.3"
 no_local_processes = 2
 no_remote_processes = 5
@@ -67,11 +67,11 @@ bid=spot_price+.01
 @assert bid >= spot_price
 
 # @info "Wrangling AWS instances..."
-# aws_ips = spot_wrangle(no_instances, spot_price, security_group_name, security_group_desc, skeys, zone, ami, instance_type)
+# aws_ips = spot_wrangle(no_instances, bid, security_group_name, security_group_desc, skeys, zone, ami, instance_type)
 # @info "Giving instances 90s to boot..."
 # sleep(90)
 
-aws_ips = ["18.218.244.125","3.19.69.137"]
+aws_ips = ["18.224.21.217","3.19.241.206"]
 
 @info "Spawning AWS cluster workers..."
 for ip in aws_ips
