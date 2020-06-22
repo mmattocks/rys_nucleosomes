@@ -34,8 +34,8 @@ local_config=LoadConfig(6:6,2:2,[""])
 remote_config=LoadConfig(4:6,1:2,[""])
 aws_instance_config=LoadConfig(1:6,0:2,[""])
 remote_machine = "10.0.0.3"
-no_local_processes = 2
-no_remote_processes = 5
+no_local_processes = 1
+no_remote_processes = 3
 #SETUP DISTRIBUTED BAUM WELCH LEARNERS
 @info "Spawning local cluster workers..."
 worker_pool=addprocs(no_local_processes, topology=:master_worker)
@@ -56,22 +56,22 @@ worker_pool=vcat(worker_pool, remote_pool)
 
 security_group_name="calc1"
 security_group_desc="calculation group"
-ami="ami-0238824bb14f0ea23"
+ami="ami-0ca1e8131cf324364"
 skeys="AWS"
 instance_type="c5.4xlarge"
 zone,spot_price=get_cheapest_zone(instance_type)
 no_instances=2
-instance_workers=8
+instance_workers=4
 bid=spot_price+.01
 
 @assert bid >= spot_price
 
-# @info "Wrangling AWS instances..."
-# aws_ips = spot_wrangle(no_instances, bid, security_group_name, security_group_desc, skeys, zone, ami, instance_type)
-# @info "Giving instances 90s to boot..."
-# sleep(90)
+@info "Wrangling AWS instances..."
+aws_ips = spot_wrangle(no_instances, bid, security_group_name, security_group_desc, skeys, zone, ami, instance_type)
+@info "Giving instances 90s to boot..."
+sleep(90)
 
-aws_ips = ["18.224.21.217","3.19.241.206"]
+# aws_ips = ["18.224.21.217","3.19.241.206"]
 
 @info "Spawning AWS cluster workers..."
 for ip in aws_ips
