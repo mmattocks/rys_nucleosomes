@@ -4,7 +4,7 @@ danio_gff_path = "/bench/PhD/seq/GRCz11/Danio_rerio.GRCz11.94.gff3"
 danio_genome_path = "/bench/PhD/seq/GRCz11/GCA_000002035.4_GRCz11_genomic.fna"
 danio_gen_index_path = "/bench/PhD/seq/GRCz11/GCA_000002035.4_GRCz11_genomic.fna.fai"
 #sample record and hmm serialisation output path
-sample_output = "/bench/PhD/NGS_binaries/BBM/survey_samples"
+sample_output = "/bench/PhD/NGS_binaries/BBM/refinement_samples"
 #non registered libs
 
 #GENERAL SETUP
@@ -13,7 +13,7 @@ using Distributed,Serialization
 
 #JOB CONSTANTS
 #CONSTANTS FOR GENOMIC SAMPLING
-const sample_set_length = Int64(4e6)
+const sample_set_length = Int64(16e6)
 const sample_window_min = 10
 const sample_window_max = 3000
 const perigenic_pad = 500

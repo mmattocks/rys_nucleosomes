@@ -1,7 +1,7 @@
 #JOB FILEPATHS
 #sample record and hmm serialisation output path
-sample_output = "/bench/PhD/NGS_binaries/BBM/BBM_samples"
-hmm_output = "/bench/PhD/NGS_binaries/BBM/hmm_chains"
+sample_output = "/bench/PhD/NGS_binaries/BBM/survey_samples"
+hmm_output = "/bench/PhD/NGS_binaries/BBM/survey_chains"
 
 #GENERAL SETUP
 @info "Loading libraries..."
@@ -30,12 +30,12 @@ end
 
 #DISTRIBUTED CLUSTER CONSTANTS
 load_dict=Dict{Int64,LoadConfig}()
-local_config=LoadConfig(6:6,2:2,[""])
-remote_config=LoadConfig(4:6,1:2,[""])
-aws_instance_config=LoadConfig(1:6,0:2,[""])
+local_config=LoadConfig(1:6,2:2)
+remote_config=LoadConfig(1:6,0:1)
+aws_instance_config=LoadConfig(1:6,0:2)
 remote_machine = "10.0.0.3"
 no_local_processes = 1
-no_remote_processes = 3
+no_remote_processes = 1
 #SETUP DISTRIBUTED BAUM WELCH LEARNERS
 @info "Spawning local cluster workers..."
 worker_pool=addprocs(no_local_processes, topology=:master_worker)
@@ -51,36 +51,36 @@ end
 
 worker_pool=vcat(worker_pool, remote_pool)
 
-#AWS PARAMS
-@info "Setting up AWS wrangling..."
+# #AWS PARAMS
+# @info "Setting up AWS wrangling..."
 
-security_group_name="calc1"
-security_group_desc="calculation group"
-ami="ami-0ca1e8131cf324364"
-skeys="AWS"
-instance_type="c5.4xlarge"
-zone,spot_price=get_cheapest_zone(instance_type)
-no_instances=2
-instance_workers=4
-bid=spot_price+.01
+# security_group_name="calc1"
+# security_group_desc="calculation group"
+# ami="ami-02df7e1881a08f163"
+# skeys="AWS"
+# instance_type="c5.4xlarge"
+# zone,spot_price=get_cheapest_zone(instance_type)
+# no_instances=1
+# instance_workers=8
+# bid=spot_price+.01
 
-@assert bid >= spot_price
+# @assert bid >= spot_price
 
-@info "Wrangling AWS instances..."
-aws_ips = spot_wrangle(no_instances, bid, security_group_name, security_group_desc, skeys, zone, ami, instance_type)
-@info "Giving instances 90s to boot..."
-sleep(90)
+# @info "Wrangling AWS instances..."
+# aws_ips = spot_wrangle(no_instances, bid, security_group_name, security_group_desc, skeys, zone, ami, instance_type)
+# @info "Giving instances 90s to boot..."
+# sleep(90)
 
-# aws_ips = ["18.224.21.217","3.19.241.206"]
+# aws_ips = ["18.223.122.201"]
 
-@info "Spawning AWS cluster workers..."
-for ip in aws_ips
-    instance_pool=addprocs([(ip, instance_workers)], tunnel=true, topology=:master_worker, sshflags="-o StrictHostKeyChecking=no")
-    for worker in instance_pool
-        load_dict[worker]=aws_instance_config
-    end
-    global worker_pool=vcat(worker_pool, instance_pool)
-end
+# @info "Spawning AWS cluster workers..."
+# for ip in aws_ips
+#     instance_pool=addprocs([(ip, instance_workers)], tunnel=true, topology=:master_worker, sshflags="-o StrictHostKeyChecking=no")
+#     for worker in instance_pool
+#         load_dict[worker]=aws_instance_config
+#     end
+#     global worker_pool=vcat(worker_pool, instance_pool)
+# end
 
 @info "Loading worker libraries everywhere..."
 @everywhere using BioBackgroundModels
