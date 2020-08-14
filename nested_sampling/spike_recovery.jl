@@ -57,42 +57,58 @@ bg_scores3=hcat(bg_scores1, bg_scores2)
 
 @info "Assembling worker pool..."
 
-ensemble = "/bench/PhD/NGS_binaries/BioMotifInference/sr_ens"
+#DISTRIBUTED CLUSTERs CONSTANTS
+remote_machine = "10.0.0.3"
+no_local_processes = 2
+no_remote_processes = 6
+
+@info "Spawning local cluster workers..."
+worker_pool=addprocs(no_local_processes, topology=:master_worker)
+remote_pool=addprocs([(remote_machine,no_remote_processes)], tunnel=true, topology=:master_worker)
+
+worker_pool=vcat(worker_pool, remote_pool)
+
+@info "Loading worker libraries everywhere..."
+@everywhere using BioMotifInference
+
+e1 = "/bench/PhD/NGS_binaries/BioMotifInference/e1"
+e2 = "/bench/PhD/NGS_binaries/BioMotifInference/e2"
+e3 = "/bench/PhD/NGS_binaries/BioMotifInference/e3"
 
 #JOB CONSTANTS
-const position_size = 141
-const ensemble_size = 100
-const no_sources = 3
+const ensemble_size = 200
+const no_sources = 2
 const source_min_bases = 3
 const source_max_bases = 12
-@assert source_min_bases < source_max_bases
 const source_length_range= source_min_bases:source_max_bases
-const mixing_prior = .3
-@assert mixing_prior >= 0 && mixing_prior <= 1
+const mixing_prior = .5
 const models_to_permute = ensemble_size * 3
-
-@info "Setting up synthetic observation set..."
+instruct = Permute_Instruct(full_perm_funcvec, ones(length(full_perm_funcvec))./length(full_perm_funcvec),models_to_permute,900)
 
 @info "Assembling source priors..."
-#prior_array= [struc_sig, tata_box]
 prior_array= Vector{Matrix{Float64}}()
-source_priors = nnlearn.assemble_source_priors(no_sources, prior_array, prior_wt, source_length_range)
+source_priors = assemble_source_priors(no_sources, prior_array)
 
-@info "Assembling ensemble..."
-path=randstring()
-isfile(string(path,'/',"ens")) ? (ens = deserialize(string(path,'/',"ens"))) :
-    (ens = nnlearn.IPM_Ensemble(path, ensemble_size, source_priors, (falses(0,0), mixing_prior), bg_lhs, obs, source_length_range))
-
-
-job_set_thresh=[-Inf,ens.naive_lh]
-param_set=(job_sets,job_set_thresh,job_limit)
+@info "Assembling ensemble 1..."
+isfile(e1) ? (ens1 = deserialize(e1)) :
+    (ens1 = nnlearn.IPM_Ensemble(worker_pool, e1, ensemble_size, source_priors, (falses(0,0), mixing_prior), bg_scores1, obs1, source_length_range))
     
-@info "Converging ensemble..."
+@info "Converging ensemble 1..."
+logZ1 = converge_ensemble!(ens1, instruct, worker_pool, .001, backup=(true,250), wk_disp=false, tuning_disp=true, ens_disp=false, conv_plot=true, src_disp=true, lh_disp=false, liwi_disp=false)
 
-final_logZ = converge_ensemble!(ensemble, instruct, worker_pool, .001, backup=(true,250), wk_disp=false, tuning_disp=true, ens_disp=false, conv_plot=true, src_disp=true, lh_disp=false, liwi_disp=false)
+@info "Assembling ensemble 2..."
+isfile(e2) ? (ens2 = deserialize(e2)) :
+    (ens2 = nnlearn.IPM_Ensemble(worker_pool, e2, ensemble_size, source_priors, (falses(0,0), mixing_prior), bg_scores2, obs2, source_length_range))
+    
+@info "Converging ensemble 2..."
+logZ2 = converge_ensemble!(ens2, instruct, worker_pool, .001, backup=(true,250), wk_disp=false, tuning_disp=true, ens_disp=false, conv_plot=true, src_disp=true, lh_disp=false, liwi_disp=false)
+
+@info "Assembling ensemble 3..."
+isfile(e3) ? (ens3 = deserialize(e3)) :
+    (ens3 = nnlearn.IPM_Ensemble(worker_pool, e3, ensemble_size, source_priors, (falses(0,0), mixing_prior), bg_scores3, obs3, source_length_range))
+    
+@info "Converging ensemble 3..."
+
+logZ3 = converge_ensemble!(ens3, instruct, worker_pool, .001, backup=(true,250), wk_disp=false, tuning_disp=true, ens_disp=false, conv_plot=true, src_disp=true, lh_disp=false, liwi_disp=false)
 
 rmprocs(worker_pool)
-
-rm(ensemble,recursive=true)
-
-#811973
