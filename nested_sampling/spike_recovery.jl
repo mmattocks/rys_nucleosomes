@@ -1,8 +1,8 @@
 #Testbed for synthetic spike recovery from example background
-using BioBackgroundModels, BioMotifInference, Serialization
+using BioBackgroundModels, BioMotifInference, Random, Distributed, Distributions, Serialization
 Random.seed!(786)
 #CONSTANTS
-no_obs=300
+no_obs=500
 obsl=100:200
 
 const folder_path="/bench/PhD/NGS_binaries/BBM/refined_folders"
@@ -10,9 +10,9 @@ const folder_path="/bench/PhD/NGS_binaries/BBM/refined_folders"
 report_folders=deserialize(folder_path)
 
 bhmm_vec=Vector{BHMM}()
-push!(bhmm_vec,report_folders["intergenic"].best_model[2])
-push!(bhmm_vec,report_folders["periexonic"].best_model[2])
-push!(bhmm_vec,report_folders["exon"].best_model[2])
+push!(bhmm_vec,report_folders["intergenic"].partition_report.best_model[2])
+push!(bhmm_vec,report_folders["periexonic"].partition_report.best_model[2])
+push!(bhmm_vec,report_folders["exon"].partition_report.best_model[2])
 
 bhmm_dist=Categorical([.6,.2,.2])
 
@@ -69,46 +69,59 @@ remote_pool=addprocs([(remote_machine,no_remote_processes)], tunnel=true, topolo
 worker_pool=vcat(worker_pool, remote_pool)
 
 @info "Loading worker libraries everywhere..."
-@everywhere using BioMotifInference
+@everywhere using BioMotifInference, Random
+@everywhere Random.seed!(myid())
 
 e1 = "/bench/PhD/NGS_binaries/BioMotifInference/e1"
 e2 = "/bench/PhD/NGS_binaries/BioMotifInference/e2"
 e3 = "/bench/PhD/NGS_binaries/BioMotifInference/e3"
 
 #JOB CONSTANTS
-const ensemble_size = 200
+const ensemble_size = 250
 const no_sources = 2
 const source_min_bases = 3
 const source_max_bases = 12
 const source_length_range= source_min_bases:source_max_bases
 const mixing_prior = .5
 const models_to_permute = ensemble_size * 3
-instruct = Permute_Instruct(full_perm_funcvec, ones(length(full_perm_funcvec))./length(full_perm_funcvec),models_to_permute,900)
+funcvec=full_perm_funcvec
+push!(funcvec, BioMotifInference.permute_source)
+push!(funcvec, BioMotifInference.permute_source)
+args=[Vector{Tuple{Symbol,Any}}() for i in 1:length(funcvec)]
+args[end-1]=[(:weight_shift_freq,0.),(:length_change_freq,1.),(:length_perm_range,1:1)]
+args[end]=[(:weight_shift_freq,.1),(:length_change_freq,0.),(:weight_shift_dist,Uniform(.00001,.01))]
+
+
+instruct = Permute_Instruct(funcvec, ones(length(funcvec))./length(funcvec),models_to_permute,100, .02; args=args)
 
 @info "Assembling source priors..."
 prior_array= Vector{Matrix{Float64}}()
-source_priors = assemble_source_priors(no_sources, prior_array)
+source_priors = BioMotifInference.assemble_source_priors(no_sources, prior_array)
 
 @info "Assembling ensemble 1..."
-isfile(e1) ? (ens1 = deserialize(e1)) :
-    (ens1 = nnlearn.IPM_Ensemble(worker_pool, e1, ensemble_size, source_priors, (falses(0,0), mixing_prior), bg_scores1, obs1, source_length_range))
+isfile(e1*"/ens") ? (ens1 = deserialize(e1*"/ens")) :
+    (ens1 = IPM_Ensemble(worker_pool, e1, ensemble_size, source_priors, (falses(0,0), mixing_prior), bg_scores1, obs1, source_length_range))
     
 @info "Converging ensemble 1..."
-logZ1 = converge_ensemble!(ens1, instruct, worker_pool, .001, backup=(true,250), wk_disp=false, tuning_disp=true, ens_disp=false, conv_plot=true, src_disp=true, lh_disp=false, liwi_disp=false)
+logZ1 = BioMotifInference.converge_ensemble!(ens1, instruct, worker_pool, .001, backup=(true,250), wk_disp=false, tuning_disp=true, ens_disp=false, conv_plot=true, src_disp=true, lh_disp=false, liwi_disp=false)
 
 @info "Assembling ensemble 2..."
-isfile(e2) ? (ens2 = deserialize(e2)) :
-    (ens2 = nnlearn.IPM_Ensemble(worker_pool, e2, ensemble_size, source_priors, (falses(0,0), mixing_prior), bg_scores2, obs2, source_length_range))
+isfile(e2*"/ens") ? (ens1 = deserialize(e2*"/ens")) :
+    (ens2 = IPM_Ensemble(worker_pool, e2, ensemble_size, source_priors, (falses(0,0), mixing_prior), bg_scores2, obs2, source_length_range))
     
 @info "Converging ensemble 2..."
-logZ2 = converge_ensemble!(ens2, instruct, worker_pool, .001, backup=(true,250), wk_disp=false, tuning_disp=true, ens_disp=false, conv_plot=true, src_disp=true, lh_disp=false, liwi_disp=false)
+logZ2 = BioMotifInference.converge_ensemble!(ens2, instruct, worker_pool, .001, backup=(true,250), wk_disp=false, tuning_disp=true, ens_disp=false, conv_plot=true, src_disp=true, lh_disp=false, liwi_disp=false)
 
 @info "Assembling ensemble 3..."
-isfile(e3) ? (ens3 = deserialize(e3)) :
-    (ens3 = nnlearn.IPM_Ensemble(worker_pool, e3, ensemble_size, source_priors, (falses(0,0), mixing_prior), bg_scores3, obs3, source_length_range))
+isfile(e3*"/ens") ? (ens1 = deserialize(e3*"/ens")) :
+    (ens3 = IPM_Ensemble(worker_pool, e3, ensemble_size, source_priors, (falses(0,0), mixing_prior), bg_scores3, obs3, source_length_range))
     
 @info "Converging ensemble 3..."
 
-logZ3 = converge_ensemble!(ens3, instruct, worker_pool, .001, backup=(true,250), wk_disp=false, tuning_disp=true, ens_disp=false, conv_plot=true, src_disp=true, lh_disp=false, liwi_disp=false)
+logZ3 = BioMotifInference.converge_ensemble!(ens3, instruct, worker_pool, .001, backup=(true,250), wk_disp=false, tuning_disp=true, ens_disp=false, conv_plot=true, src_disp=true, lh_disp=false, liwi_disp=false)
+
+@info "Evidence ratio of joint 1&2 / 3:"
+ratio=exp((logZ1+logZ2)-logZ3)
+println(ratio)
 
 rmprocs(worker_pool)
