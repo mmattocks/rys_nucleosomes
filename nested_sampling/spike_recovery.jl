@@ -72,9 +72,9 @@ worker_pool=vcat(worker_pool, remote_pool)
 @everywhere using BioMotifInference, Random
 @everywhere Random.seed!(myid())
 
-e1 = "/bench/PhD/NGS_binaries/BioMotifInference/e1"
-e2 = "/bench/PhD/NGS_binaries/BioMotifInference/e2"
-e3 = "/bench/PhD/NGS_binaries/BioMotifInference/e3"
+e1 = "/bench/PhD/NGS_binaries/BMI/e1"
+e2 = "/bench/PhD/NGS_binaries/BMI/e2"
+e3 = "/bench/PhD/NGS_binaries/BMI/e3"
 
 #JOB CONSTANTS
 const ensemble_size = 250

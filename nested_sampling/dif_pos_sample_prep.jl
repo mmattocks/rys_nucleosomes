@@ -8,6 +8,7 @@ danio_gen_index_path = "/bench/PhD/seq/GRCz11/GCA_000002035.4_GRCz11_genomic.fna
 danio_gff_path = "/bench/PhD/seq/GRCz11/Danio_rerio.GRCz11.94.gff3"
 
 refined_folders_path = "/bench/PhD/NGS_binaries/BBM/refined_folders"
+selected_hmms = "/bench/PhD/NGS_binaries/BBM/selected_hmms"
 
 sib_df_binary = "/bench/PhD/NGS_binaries/BMI/sib_diff_positions"
 rys_df_binary = "/bench/PhD/NGS_binaries/BMI/rys_diff_positions"
@@ -80,10 +81,12 @@ for (part, folder) in refined_folders
     BHMM_dict[part]=folder.partition_report.best_model[2]
 end
 
+serialize(selected_hmms,BHMM_dict)
+
 @info "Performing calculations..."
 sib_lh_matrix = BGHMM_likelihood_calc(sib_diff_df, BHMM_dict, symbol=:seq)
 rys_lh_matrix = BGHMM_likelihood_calc(rys_diff_df, BHMM_dict, symbol=:seq)
-combined_lh_matrix = BGHMM_likelihood_calc(rys_diff_df, BHMM_dict, symbol=:seq)
+combined_lh_matrix = hcat(sib_lh_matrix,rys_lh_matrix)
 
 @info "Serializing background matrices..."
 serialize(sib_diff_bg, sib_lh_matrix)
