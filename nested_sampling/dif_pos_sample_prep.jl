@@ -1,4 +1,9 @@
 using BioSequences, Distributed, DataFrames, nucpos, BioBackgroundModels, CSV, Serialization
+import StatsBase:sample
+
+#JOB PATHS AND CONSTANTS
+
+sample_rows = 35461 #5 million bases at 141 bp/nucleosome position
 
 sib_pos = "/bench/PhD/danpos_results/pooled/sib.Fnor.smooth.positions.xls"
 rys_pos = "/bench/PhD/danpos_results/pooled/rys.Fnor.smooth.positions.xls"
@@ -48,6 +53,10 @@ nucpos.add_position_sequences!(rys_diff_df, danio_genome_path, danio_gen_index_p
 @info "Filtering ambiguous sequences..."
 deleterows!(sib_diff_df, [hasambiguity(seq) for seq in sib_diff_df.seq])
 deleterows!(rys_diff_df, [hasambiguity(seq) for seq in rys_diff_df.seq])
+
+@info "Sampling subsets of sequences..."
+
+sib_diff_df=sib_diff_df[sample(axes(sib_diff_df, 1), sample_rows; replace = false, ordered = true), :]
 
 @info "Masking positions by genome partition and strand..."
 BioBackgroundModels.add_partition_masks!(sib_diff_df, danio_gff_path, 500, (:chr,:seq,:start))
