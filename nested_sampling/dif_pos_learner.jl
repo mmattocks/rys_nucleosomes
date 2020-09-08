@@ -23,7 +23,7 @@ worker_pool=vcat(worker_pool, remote_pool)
 
 security_group_name="calc1"
 security_group_desc="calculation group"
-ami="ami-04267c36750e87a6e"
+ami="ami-0534a64ad75fb173a"
 skeys="AWS"
 instance_type="c5a.24xlarge"
 zone,spot_price=get_cheapest_zone(instance_type)
@@ -63,8 +63,8 @@ max_clamps=fill(1.,length(funcvec))
 max_clamps[6:9].=.5 #merges should be clamped to no more than half of function calls to prevent network hammering
 
 initial_weights= ones(length(funcvec))./length(funcvec)
-override_weights=fill(.02,length(funcvec))
-override_weights[4]=.4;override_weights[7]=.04;override_weights[11]=.4
+override_weights=fill(.015,length(funcvec))
+override_weights[6]=.05;override_weights[7:9].=.045;override_weights[13:14].=.3475
 override_time=10.
 
 args=[Vector{Tuple{Symbol,Any}}() for i in 1:length(funcvec)]
