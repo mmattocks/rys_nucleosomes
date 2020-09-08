@@ -56,10 +56,11 @@ models_to_permute=5000
 func_limit=20
 push!(funcvec, BioMotifInference.perm_src_fit_mix)
 push!(funcvec, BioMotifInference.permute_source)
+push!(funcvec, BioMotifInference.permute_mix)
 
-min_clamps=fill(.02,length(funcvec))
+min_clamps=fill(.015,length(funcvec))
 max_clamps=fill(1.,length(funcvec))
-max_clamps[6:7].=[.5,.5] #merges should be clamped to no more than half of function calls
+max_clamps[6:9].=.5 #merges should be clamped to no more than half of function calls to prevent network hammering
 
 initial_weights= ones(length(funcvec))./length(funcvec)
 override_weights=fill(.02,length(funcvec))
@@ -67,8 +68,10 @@ override_weights[4]=.4;override_weights[7]=.04;override_weights[11]=.4
 override_time=10.
 
 args=[Vector{Tuple{Symbol,Any}}() for i in 1:length(funcvec)]
-args[end-1]=[(:weight_shift_freq,0.),(:length_change_freq,1.),(:length_perm_range,1:1)]
-args[end]=[(:weight_shift_freq,.1),(:length_change_freq,0.),(:weight_shift_dist,Uniform(.000001,.01))]
+args[end-2]=[(:weight_shift_freq,0.),(:length_change_freq,1.),(:length_perm_range,1:1)]
+args[end-1]=[(:weight_shift_freq,.1),(:length_change_freq,0.),(:weight_shift_dist,Uniform(.000001,.01))]
+args[end]=[(:iterates,50),(:mix_move_range,1:250)]
+
 
 instruct = Permute_Instruct(funcvec, initial_weights, models_to_permute, func_limit;min_clmps=min_clamps, max_clmps=max_clamps, override_time=override_time, override_weights=override_weights, args=args)
 
