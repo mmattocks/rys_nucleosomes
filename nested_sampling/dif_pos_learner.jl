@@ -9,8 +9,8 @@ combined_e_pth = "/bench/PhD/NGS_binaries/BMI/combined_e"
 
 #DISTRIBUTED CLUSTERs CONSTANTS
 remote_machine = "10.0.0.3"
-no_local_processes = 1
-no_remote_processes = 3
+no_local_processes = 2
+no_remote_processes = 6
 
 @info "Spawning local cluster workers..."
 worker_pool=addprocs(no_local_processes, topology=:master_worker)
@@ -23,22 +23,22 @@ worker_pool=vcat(worker_pool, remote_pool)
 
 security_group_name="calc1"
 security_group_desc="calculation group"
-ami="ami-09042dd93f7b89c57"
+ami="ami-04267c36750e87a6e"
 skeys="AWS"
-instance_type="c5.4xlarge"
+instance_type="c5a.24xlarge"
 zone,spot_price=get_cheapest_zone(instance_type)
-no_instances=6
-instance_workers=4
-bid=spot_price+.05
+no_instances=4
+instance_workers=48
+bid=spot_price+.1
 
 @assert bid >= spot_price
 
-# @info "Wrangling AWS instances..."
-# aws_ips = spot_wrangle(no_instances, bid, security_group_name, security_group_desc, skeys, zone, ami, instance_type)
-# @info "Giving instances 90s to boot..."
-# sleep(90)
+@info "Wrangling AWS instances..."
+aws_ips = spot_wrangle(no_instances, bid, security_group_name, security_group_desc, skeys, zone, ami, instance_type)
+@info "Giving instances 120s to boot..."
+sleep(120)
 
-aws_ips = ["3.128.206.43","3.21.12.243","3.129.21.145","3.136.22.21","18.220.112.117","3.129.194.226"]
+# aws_ips = ["18.223.21.162","18.225.5.234","18.222.238.67","3.134.91.251"]
 
 @info "Spawning AWS cluster workers..."
 for ip in aws_ips
@@ -51,17 +51,26 @@ end
 @everywhere Random.seed!(myid()*100000)
 
 #JOB CONSTANTS
-models_to_permute=5000
-func_limit=30
-clamp=.02
 funcvec=full_perm_funcvec
+models_to_permute=5000
+func_limit=20
+push!(funcvec, BioMotifInference.perm_src_fit_mix)
 push!(funcvec, BioMotifInference.permute_source)
-push!(funcvec, BioMotifInference.permute_source)
+
+min_clamps=fill(.02,length(funcvec))
+max_clamps=fill(1.,length(funcvec))
+max_clamps[6:7].=[.5,.5] #merges should be clamped to no more than half of function calls
+
+initial_weights= ones(length(funcvec))./length(funcvec)
+override_weights=fill(.02,length(funcvec))
+override_weights[4]=.4;override_weights[7]=.04;override_weights[11]=.4
+override_time=10.
+
 args=[Vector{Tuple{Symbol,Any}}() for i in 1:length(funcvec)]
 args[end-1]=[(:weight_shift_freq,0.),(:length_change_freq,1.),(:length_perm_range,1:1)]
-args[end]=[(:weight_shift_freq,.1),(:length_change_freq,0.),(:weight_shift_dist,Uniform(.00001,.01))]
+args[end]=[(:weight_shift_freq,.1),(:length_change_freq,0.),(:weight_shift_dist,Uniform(.000001,.01))]
 
-instruct = Permute_Instruct(funcvec, ones(length(funcvec))./length(funcvec), models_to_permute, func_limit, clamp; args=args)
+instruct = Permute_Instruct(funcvec, initial_weights, models_to_permute, func_limit;min_clmps=min_clamps, max_clmps=max_clamps, override_time=override_time, override_weights=override_weights, args=args)
 
 display_rotation=[true,10,1,[[:tuning_disp,:lh_disp,:src_disp],[:conv_plot,:liwi_disp,:ens_disp]]]
 
