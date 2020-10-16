@@ -3,7 +3,7 @@ import StatsBase:sample
 
 #JOB PATHS AND CONSTANTS
 
-sample_rows = 14185 #2 million bases
+sample_rows = 7092 #2 million bases
 
 sib_pos = "/bench/PhD/danpos_results/pooled/sib.Fnor.smooth.positions.xls"
 rys_pos = "/bench/PhD/danpos_results/pooled/rys.Fnor.smooth.positions.xls"

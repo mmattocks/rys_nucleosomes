@@ -23,11 +23,11 @@ worker_pool=vcat(worker_pool, remote_pool)
 
 security_group_name="calc1"
 security_group_desc="calculation group"
-ami="ami-0534a64ad75fb173a"
+ami="ami-0bb0f5609b995d39e"
 skeys="AWS"
 instance_type="c5a.24xlarge"
 zone,spot_price=get_cheapest_zone(instance_type)
-no_instances=4
+no_instances=5
 instance_workers=48
 bid=spot_price+.1
 
@@ -35,10 +35,11 @@ bid=spot_price+.1
 
 @info "Wrangling AWS instances..."
 aws_ips = spot_wrangle(no_instances, bid, security_group_name, security_group_desc, skeys, zone, ami, instance_type)
-@info "Giving instances 120s to boot..."
-sleep(120)
+@info "Giving instances 150s to boot..."
+sleep(150)
 
-# aws_ips = ["18.223.21.162","18.225.5.234","18.222.238.67","3.134.91.251"]
+# aws_ips=["18.223.214.57","18.224.4.81", "3.17.13.150","3.21.113.229","18.222.211.44"]
+
 
 @info "Spawning AWS cluster workers..."
 for ip in aws_ips
@@ -52,49 +53,55 @@ end
 
 #JOB CONSTANTS
 funcvec=full_perm_funcvec
-models_to_permute=5000
-func_limit=20
+models_to_permute=10000
+func_limit=25
 push!(funcvec, BioMotifInference.perm_src_fit_mix)
-push!(funcvec, BioMotifInference.permute_source)
-push!(funcvec, BioMotifInference.permute_mix)
+push!(funcvec, BioMotifInference.random_decorrelate)
 
-min_clamps=fill(.015,length(funcvec))
-max_clamps=fill(1.,length(funcvec))
-max_clamps[6:9].=.5 #merges should be clamped to no more than half of function calls to prevent network hammering
+min_clamps=fill(.01,length(funcvec))
+min_clamps[2:3].=.1 #perm_src_fit_mix & permute_mix
+min_clamps[8]=.1 #difference_merge
+max_clamps=fill(.5,length(funcvec))
+max_clamps[6:7].=.15 #ss and am
+max_clamps[9]=.15 #sim merge
 
 initial_weights= ones(length(funcvec))./length(funcvec)
-override_weights=fill(.015,length(funcvec))
-override_weights[6]=.05;override_weights[7:9].=.045;override_weights[13:14].=.3475
-override_time=10.
+# override_weights=fill(.034375,length(funcvec))
+# override_weights[6:9].=.1;override_weights[13:14].=.1625
+# override_time=20.
 
 args=[Vector{Tuple{Symbol,Any}}() for i in 1:length(funcvec)]
-args[end-2]=[(:weight_shift_freq,0.),(:length_change_freq,1.),(:length_perm_range,1:1)]
-args[end-1]=[(:weight_shift_freq,.1),(:length_change_freq,0.),(:weight_shift_dist,Uniform(.000001,.01))]
-args[end]=[(:iterates,50),(:mix_move_range,1:250)]
+args[end-1]=[(:weight_shift_freq,0.),(:length_change_freq,1.),(:length_perm_range,1:1)]
+args[end]=[(:iterates,50),(:source_permute_freq,.3),(:mix_move_range,1:10)]
 
-
-instruct = Permute_Instruct(funcvec, initial_weights, models_to_permute, func_limit;min_clmps=min_clamps, max_clmps=max_clamps, override_time=override_time, override_weights=override_weights, args=args)
+instruct = Permute_Instruct(funcvec, initial_weights, models_to_permute, func_limit;min_clmps=min_clamps, max_clmps=max_clamps, args=args)
 
 display_rotation=[true,10,1,[[:tuning_disp,:lh_disp,:src_disp],[:conv_plot,:liwi_disp,:ens_disp]]]
 
 @info "Beginning nested sampling for sib ensemble..."
 sib_e=deserialize(sib_e_pth*"/ens")
-sib_logZ = converge_ensemble!(sib_e, instruct, worker_pool, .001, backup=(true,25), tuning_disp=true,lh_disp=true,src_disp=true, disp_rotate_inst=display_rotation)
+sib_logZ = converge_ensemble!(sib_e, instruct, worker_pool, converge_criterion="compression", converge_factor=150., backup=(true,25), tuning_disp=true,lh_disp=true,src_disp=true, disp_rotate_inst=display_rotation)
+sib_logZ_err=sqrt(sib_e.Hi[end]/length(sib_e.log_Li))
 sib_e=[]; Base.GC.gc();
 
 @info "Beginning nested sampling for rys ensemble..."
 rys_e=deserialize(rys_e_pth*"/ens")
-rys_logZ = converge_ensemble!(rys_e, instruct, worker_pool, .001, backup=(true,25), tuning_disp=true,lh_disp=true,src_disp=true, disp_rotate_inst=display_rotation)
+rys_logZ = converge_ensemble!(rys_e, instruct, worker_pool, converge_criterion="compression", converge_factor=150., backup=(true,25), tuning_disp=true,lh_disp=true,src_disp=true, disp_rotate_inst=display_rotation)
+rys_logZ_err=sqrt(rys_e.Hi[end]/length(rys_e.log_Li))
 rys_e=[]; Base.GC.gc();
 
 @info "Beginning nested sampling for combined ensemble..."
 combined_e=deserialize(combined_e_pth*"/ens")
-combined_logZ = converge_ensemble!(combined_e, instruct, worker_pool, .001, backup=(true,25), tuning_disp=true,lh_disp=true,src_disp=true,disp_rotate_inst=display_rotation)
+combined_logZ = converge_ensemble!(combined_e, instruct, worker_pool, converge_criterion="compression", converge_factor=150., backup=(true,25), tuning_disp=true,lh_disp=true,src_disp=true,disp_rotate_inst=display_rotation)
+combined_logZ_err=sqrt(combined_e.Hi[end]/length(combined_e.log_Li))
 combined_e=[]; Base.GC.gc();
 
-@info "Evidence ratio of joint sib+rys / combined:"
-ratio=exp((logZ1+logZ2)-logZ3)
-println(ratio)
+@info "log evidence ratio of joint sib+rys / combined:"
+ratio=(sib_logZ+rys_logZ)-combined_logZ
+ratio_err=sqrt(sib_logZ_err^2 + rys_logZ_err^2 + combined_logZ_err^2)
+println("$ratio ± $ratio_err, $(ratio/ratio_err) standard deviation significance")
+
+serialize("/bench/PhD/NGS_binaries/BMI/dif_pos_learner_report", "$ratio ± $ratio_err, $(ratio/ratio_err) standard deviation significance")
 
 rmprocs(worker_pool)
 

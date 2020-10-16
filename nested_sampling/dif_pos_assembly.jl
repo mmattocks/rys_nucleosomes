@@ -21,14 +21,13 @@ combined_e_pth = "/bench/PhD/NGS_binaries/BMI/combined_e"
 
 #JOB CONSTANTS
 const ensemble_size = 500
-const no_sources = 4
+const no_sources = 8
 const source_min_bases = 3
 const source_max_bases = 10
 @assert source_min_bases < source_max_bases
 const source_length_range= source_min_bases:source_max_bases
 const mixing_prior = .07
 @assert mixing_prior >= 0 && mixing_prior <= 1
-const prior_wt=1.2
 
 @info "Loading master libraries..."
 using Distributed, Distributions, Serialization
